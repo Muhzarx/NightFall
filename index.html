@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>NIGHTFALL — Horror 3D</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;600;800&display=swap');
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050708;color:#e9e9e9;font-family:Inter,Arial}
+canvas{display:block}#hud{position:fixed;inset:0;pointer-events:none}
+.brand{position:absolute;top:22px;left:24px;font:700 20px Cinzel;letter-spacing:5px;text-shadow:0 2px 12px #000}
+.sub{font:10px Inter;letter-spacing:3px;color:#9aaba6;margin-top:5px}
+#objective{position:absolute;top:24px;right:24px;text-align:right;font-size:12px;letter-spacing:1px;color:#d5ded9;text-shadow:0 2px 8px #000}
+#objective b{color:#d7b47b;display:block;margin-bottom:6px}
+#cross{position:absolute;left:50%;top:50%;width:8px;height:8px;border:1px solid #c7d6cc;border-radius:50%;transform:translate(-50%,-50%);opacity:.55}
+#bottom{position:absolute;bottom:22px;left:24px;font-size:11px;letter-spacing:1px;color:#b4c0ba;text-shadow:0 2px 8px #000}
+#status{position:absolute;bottom:22px;right:24px;font-size:11px;color:#d7b47b;letter-spacing:2px}
+#toast{position:absolute;left:50%;bottom:16%;transform:translateX(-50%);font-size:12px;letter-spacing:2px;color:#f0d5a8;text-shadow:0 2px 10px #000;opacity:0;transition:opacity .3s}
+#overlay{position:fixed;inset:0;background:radial-gradient(ellipse at center,rgba(17,27,25,.72),rgba(2,4,5,.97));display:flex;align-items:center;justify-content:center;z-index:5;padding:20px}
+.panel{width:min(520px,100%);text-align:center;padding:42px 34px;border:1px solid rgba(190,205,194,.2);background:rgba(4,8,8,.78);box-shadow:0 20px 90px #000}
+h1{font:700 clamp(34px,8vw,58px) Cinzel;letter-spacing:8px;margin:0 0 8px;color:#e4e4dc}
+.kicker{font-size:10px;letter-spacing:4px;color:#b88b68;margin-bottom:26px}
+.desc{font-size:13px;line-height:1.8;color:#aebbb4;margin:0 auto 25px;max-width:390px}
+button{pointer-events:auto;background:#b28b66;color:#090b0a;border:0;padding:14px 25px;font-weight:800;letter-spacing:2px;cursor:pointer}
+button:hover{background:#d1ad85}.hint{font-size:10px;line-height:1.8;color:#78877f;margin-top:20px;letter-spacing:1px}
+#mobile{display:none;position:fixed;inset:0;pointer-events:none;z-index:3}
+#stick{position:absolute;left:25px;bottom:32px;width:116px;height:116px;border-radius:50%;border:1px solid #ffffff55;background:#111a;pointer-events:auto;touch-action:none}
+#nub{position:absolute;left:36px;top:36px;width:42px;height:42px;border-radius:50%;background:#d4d9d277;border:1px solid #fff8}
+.actions{position:absolute;right:20px;bottom:35px;display:flex;flex-direction:column;gap:10px;pointer-events:auto}
+.actions button{padding:12px 13px;font-size:10px;background:#17201dcc;color:#eee;border:1px solid #ffffff44}
+#damage{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse,transparent 35%,rgba(120,0,0,.0) 100%);transition:background .15s}
+@media(max-width:800px),(pointer:coarse){#mobile{display:block}#bottom{max-width:48%;line-height:1.7}.brand{font-size:16px;left:15px;top:15px}#objective{right:15px;top:15px;font-size:10px}}
+</style>
+</head>
+<body>
+<div id="hud">
+ <div class="brand">NIGHTFALL<div class="sub">THE LAST LIGHT</div></div>
+ <div id="objective"><b>OBJECTIVE</b><span id="goal">Temukan 3 segel untuk membuka gerbang.</span></div>
+ <div id="cross"></div><div id="bottom">WASD / JOYSTICK — BERGERAK<br>SHIFT — LARI · F — SENTER · C — GANTI KAMERA</div>
+ <div id="status">SEALS 0 / 3</div><div id="toast"></div>
+</div>
+<div id="mobile"><div id="stick"><div id="nub"></div></div><div class="actions"><button id="run">RUN</button><button id="flash">FLASHLIGHT</button><button id="cam">CAMERA</button><button id="interact">INTERACT</button></div></div>
+<div id="damage"></div>
+<div id="overlay"><div class="panel"><h1>NIGHTFALL</h1><div class="kicker">A 3D SURVIVAL HORROR EXPERIENCE</div><p class="desc">Hutan ini tidak pernah benar-benar tidur. Tiga segel tersembunyi di antara reruntuhan. Temukan semuanya, nyalakan gerbang, dan jangan biarkan sesuatu di balik kabut mendekat.</p><button id="start">ENTER THE FOREST</button><div class="hint">WASD untuk bergerak · SHIFT untuk berlari<br>F senter · C ganti kamera · E interaksi<br>Di Android: gunakan joystick dan tombol di layar.</div></div></div>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x080e10);scene.fog=new THREE.FogExp2(0x080e10,.038);
+const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.1,180);
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;document.body.appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0x9aabb0,0x171b17,1.05));
+const moon=new THREE.DirectionalLight(0x9aa9b5,1.3);moon.position.set(-18,30,12);moon.castShadow=true;moon.shadow.mapSize.set(1024,1024);scene.add(moon);
+const ground=new THREE.Mesh(new THREE.PlaneGeometry(180,180),new THREE.MeshStandardMaterial({color:0x18211b,roughness:1}));ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
+const mat=(c,r=1,m=0)=>new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m});
+const bark=mat(0x292b25),leaf=mat(0x17251e),leaf2=mat(0x22352a),stone=mat(0x343a36),glow= new THREE.MeshStandardMaterial({color:0x9b653c,emissive:0x6c2d10,emissiveIntensity:1.5});
+let seed=42;function rand(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296}
+function tree(x,z,s=1){let g=new THREE.Group();g.position.set(x,0,z);g.scale.setScalar(s);let trunk=new THREE.Mesh(new THREE.CylinderGeometry(.22,.42,4,7),bark);trunk.position.y=2;trunk.castShadow=true;g.add(trunk);for(let i=0;i<3;i++){let crown=new THREE.Mesh(new THREE.ConeGeometry(1.7-i*.22,3.1,7),i%2?leaf:leaf2);crown.position.set((rand()-.5)*.3,3.3+i*1.15,(rand()-.5)*.3);crown.castShadow=true;g.add(crown)}scene.add(g)}
+for(let i=0;i<155;i++){let a=rand()*Math.PI*2,r=12+rand()*65,x=Math.cos(a)*r,z=Math.sin(a)*r;if(Math.abs(x)<5&&z<8&&z>-15)continue;tree(x,z,.65+rand()*1.15)}
+// scattered rocks, dead logs
+for(let i=0;i<65;i++){let x=(rand()-.5)*95,z=(rand()-.5)*95;if(Math.abs(x)<5&&Math.abs(z)<8)continue;let rock=new THREE.Mesh(new THREE.DodecahedronGeometry(.35+rand()*.8,0),stone);rock.position.set(x,.25,z);rock.rotation.set(rand(),rand(),rand());rock.scale.y=.5+rand();rock.castShadow=true;rock.receiveShadow=true;scene.add(rock)}
+// ruins and gate
+function block(x,y,z,sx,sy,sz,material=stone){let o=new THREE.Mesh(new THREE.BoxGeometry(sx,sy,sz),material);o.position.set(x,y,z);o.castShadow=true;o.receiveShadow=true;scene.add(o);return o}
+for(let side of [-1,1]){block(side*4,2,-22,.8,4,1);block(side*4,3.7,-22,.9,.4,1.2);block(side*2,1,-22,.5,2,.6)}
+block(0,4,-22,8,.45,.8,mat(0x252b28));
+const gateLight=new THREE.PointLight(0xb56b39,2,13);gateLight.position.set(0,3,-22);scene.add(gateLight);
+// altar
+block(0,.5,0,3,1,3,mat(0x292e2b));block(0,1.15,0,2.3,.25,2.3,stone);
+const player=new THREE.Group();scene.add(player);player.position.set(0,0,7);
+const body=new THREE.Mesh(new THREE.CapsuleGeometry(.38,.8,4,8),mat(0x303b39));body.position.y=1.05;body.castShadow=true;player.add(body);
+const head=new THREE.Mesh(new THREE.SphereGeometry(.25,12,10),mat(0x9a8877));head.position.y=1.72;player.add(head);
+const pack=new THREE.Mesh(new THREE.BoxGeometry(.48,.55,.25),mat(0x242923));pack.position.set(0,1.1,-.34);player.add(pack);
+const flashlight=new THREE.SpotLight(0xd9e4dc,85,34,Math.PI/7,.45,1.4);flashlight.position.set(0,1.65,.1);flashlight.target.position.set(0,1.3,-5);player.add(flashlight,flashlight.target);flashlight.castShadow=true;let flashOn=true;
+// collectibles
+const seals=[];const sealPositions=[[-13,-9],[14,-15],[17,12]];
+sealPositions.forEach((p,i)=>{let grp=new THREE.Group();grp.position.set(p[0],.9,p[1]);let ring=new THREE.Mesh(new THREE.TorusGeometry(.48,.09,8,24),glow);ring.rotation.x=Math.PI/2;grp.add(ring);let gem=new THREE.Mesh(new THREE.OctahedronGeometry(.3),glow);gem.position.y=.45;grp.add(gem);let l=new THREE.PointLight(0xc77b45,1.5,5);l.position.y=.4;grp.add(l);scene.add(grp);seals.push({grp,got:false})});
+// monster silhouette
+const monster=new THREE.Group();let dark=mat(0x090d0c),eyes=new THREE.MeshStandardMaterial({color:0xb43e27,emissive:0x9b160b,emissiveIntensity:2});
+let torso=new THREE.Mesh(new THREE.CapsuleGeometry(.48,1.15,4,7),dark);torso.position.y=1.6;monster.add(torso);
+let mh=new THREE.Mesh(new THREE.SphereGeometry(.36,10,8),dark);mh.position.y=2.55;monster.add(mh);
+for(let x of [-.15,.15]){let e=new THREE.Mesh(new THREE.SphereGeometry(.055,8,8),eyes);e.position.set(x,2.6,-.3);monster.add(e)}
+for(let x of [-.5,.5]){let arm=new THREE.Mesh(new THREE.CylinderGeometry(.12,.08,1.5,6),dark);arm.position.set(x,1.65,0);arm.rotation.z=x*.6;monster.add(arm)}
+monster.position.set(0,0,-37);scene.add(monster);
+const keys={};addEventListener('keydown',e=>{keys[e.code]=true;if(e.code==='KeyF')toggleFlash();if(e.code==='KeyC')toggleCamera();if(e.code==='KeyE')interact()});addEventListener('keyup',e=>keys[e.code]=false);
+let yaw=0,pitch=0,third=true,started=false,won=false,dead=false,collected=0;let joy={x:0,y:0},drag=null;
+function toggleFlash(){flashOn=!flashOn;flashlight.visible=flashOn;toast(flashOn?'SENTER MENYALA':'SENTER DIMATIKAN')}
+function toggleCamera(){third=!third;toast(third?'KAMERA THIRD PERSON':'KAMERA FIRST PERSON')}
+const toastEl=document.querySelector('#toast');let toastTimer;function toast(t){toastEl.textContent=t;toastEl.style.opacity=1;clearTimeout(toastTimer);toastTimer=setTimeout(()=>toastEl.style.opacity=0,1800)}
+function interact(){if(dead||won)return;let near=seals.find(s=>!s.got&&s.grp.position.distanceTo(player.position)<2.4);if(near){near.got=true;near.grp.visible=false;collected++;document.querySelector('#status').textContent=`SEALS ${collected} / 3`;toast('SEGEL BERHASIL DIAMBIL');if(collected===3)document.querySelector('#goal').textContent='Gerbang terbuka. Pergilah ke gerbang di utara.';return}
+if(collected===3&&player.position.distanceTo(new THREE.Vector3(0,0,-22))<5){won=true;showEnd('YOU ESCAPED','Kamu berhasil keluar dari hutan. Untuk sekarang.')}
+else toast('TIDAK ADA YANG BISA DIGUNAKAN DI SINI')}
+document.querySelector('#interact').onclick=interact;document.querySelector('#flash').onclick=toggleFlash;document.querySelector('#cam').onclick=toggleCamera;
+let running=false;document.querySelector('#run').onpointerdown=()=>running=true;document.querySelector('#run').onpointerup=()=>running=false;
+const stick=document.querySelector('#stick'),nub=document.querySelector('#nub');stick.addEventListener('pointerdown',e=>{stick.setPointerCapture(e.pointerId);drag={x:e.clientX,y:e.clientY};moveJoy(e)});stick.addEventListener('pointermove',e=>{if(drag)moveJoy(e)});stick.addEventListener('pointerup',()=>{drag=null;joy={x:0,y:0};nub.style.transform='translate(0,0)'});stick.addEventListener('pointercancel',()=>{drag=null;joy={x:0,y:0};nub.style.transform='translate(0,0)'});
+function moveJoy(e){let dx=e.clientX-(drag?.x??e.clientX),dy=e.clientY-(drag?.y??e.clientY),len=Math.hypot(dx,dy),m=Math.min(35,len),a=Math.atan2(dy,dx);joy={x:Math.cos(a)*m/35,y:Math.sin(a)*m/35};nub.style.transform=`translate(${joy.x*35}px,${joy.y*35}px)`}
+addEventListener('mousemove',e=>{if(document.pointerLockElement===renderer.domElement){yaw-=e.movementX*.0025;pitch=Math.max(-.45,Math.min(.55,pitch-e.movementY*.0018))}});
+renderer.domElement.addEventListener('click',()=>{if(started&&!matchMedia('(pointer:coarse)').matches)renderer.domElement.requestPointerLock?.()});
+function showEnd(title,msg){document.exitPointerLock?.();let ov=document.querySelector('#overlay');ov.style.display='flex';ov.innerHTML=`<div class="panel"><h1>${title}</h1><div class="kicker">NIGHTFALL — THE LAST LIGHT</div><p class="desc">${msg}</p><button onclick="location.reload()">PLAY AGAIN</button><div class="hint">© Muhammad Hafizd Anshari</div></div>`}
+document.querySelector('#start').onclick=()=>{started=true;document.querySelector('#overlay').style.display='none';if(!matchMedia('(pointer:coarse)').matches)renderer.domElement.requestPointerLock?.();toast('TEMUKAN TIGA SEGEL')};
+let last=performance.now(),elapsed=0;
+function loop(now){requestAnimationFrame(loop);let dt=Math.min((now-last)/1000,.04);last=now;if(!started||dead||won){renderer.render(scene,camera);return}elapsed+=dt;
+let forward=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0)-joy.y;let side=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0)+joy.x;let len=Math.hypot(forward,side);if(len>1){forward/=len;side/=len}
+let sprint=keys.ShiftLeft||keys.ShiftRight||running;let speed=sprint?7:4;let dir=new THREE.Vector3(Math.sin(yaw),0,-Math.cos(yaw));let right=new THREE.Vector3(Math.cos(yaw),0,Math.sin(yaw));player.position.addScaledVector(dir,forward*speed*dt);player.position.addScaledVector(right,side*speed*dt);player.position.x=THREE.MathUtils.clamp(player.position.x,-48,48);player.position.z=THREE.MathUtils.clamp(player.position.z,-48,48);if(len>.08)player.rotation.y=Math.atan2(dir.x*forward+right.x*side, -dir.z*forward-right.z*side);
+seals.forEach(s=>{if(s.grp.visible){s.grp.rotation.y+=dt*.7;s.grp.position.y=.9+Math.sin(elapsed*2+s.grp.position.x)*.12}});
+let d=monster.position.distanceTo(player.position);let sees=d<19;let target=player.position.clone();if(sees){target.y=0;monster.position.lerp(target,dt*(d<7?1.25:.52));monster.lookAt(player.position.x,0,player.position.z)}else{monster.position.x=Math.sin(elapsed*.2)*10;monster.position.z=-37+Math.cos(elapsed*.15)*4}
+if(d<1.65){dead=true;showEnd('YOU WERE FOUND','Sesuatu dari balik kabut akhirnya menemukanmu. Jangan menyerah.')}
+let targetCam=new THREE.Vector3();if(third){let back=new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw)).multiplyScalar(5.2);targetCam.copy(player.position).add(new THREE.Vector3(0,2.7,0)).add(back);targetCam.y+=pitch*3;camera.position.lerp(targetCam,.12);camera.lookAt(player.position.x,player.position.y+1.3,player.position.z)}else{camera.position.copy(player.position).add(new THREE.Vector3(0,1.65,0));camera.rotation.set(pitch,yaw,0,'YXZ')}
+flashlight.position.set(0,1.65,.1);flashlight.target.position.set(Math.sin(yaw)*-8,1.3,-Math.cos(yaw)*8);
+let danger=THREE.MathUtils.clamp((13-d)/13,0,1);document.querySelector('#damage').style.background=`radial-gradient(ellipse,transparent 35%,rgba(120,0,0,${danger*.42}) 100%)`;
+document.querySelector('#status').style.color=d<10?'#e35c4b':'#d7b47b';
+renderer.render(scene,camera)}
+requestAnimationFrame(loop);
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+</script>
+<div style="position:fixed;bottom:4px;left:0;right:0;text-align:center;font:9px Inter;letter-spacing:1px;color:#65736c;pointer-events:none">© Muhammad Hafizd Anshari</div>
+</body></html>
